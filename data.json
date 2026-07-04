@@ -1,0 +1,8 @@
+{
+    "platos": [
+        {"nombre": "Ceviche", "precio": 35.0},
+        {"nombre": "Arroz con Pato", "precio": 25.0},
+        {"nombre": "Lomo Saltado", "precio": 40.0},
+        {"nombre": "Seco de Cabrito", "precio": 30.0}
+    ]
+}
