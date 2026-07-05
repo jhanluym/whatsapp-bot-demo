@@ -6,43 +6,59 @@ from groq import Groq
 
 app = Flask(__name__)
 
-# Configuración de la API Key desde las variables de entorno de Render
 api_key = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=api_key)
 
-# Cargar menú desde data.json
-# Usamos encoding='utf-8' para evitar problemas con tildes
+# "Libreta" para guardar la memoria de los usuarios
+user_memory = {}
+
 with open('data.json', 'r', encoding='utf-8') as f:
     MENU = json.load(f)
 
 @app.route("/bot", methods=['POST'])
 def bot():
     incoming_msg = request.values.get('Body', '').lower()
+    sender_id = request.values.get('From') # Identificamos al usuario por su número
     resp = MessagingResponse()
     msg = resp.message()
 
-    # System prompt con los datos del menú convertidos a texto
-    prompt = f"""Eres un asistente de reservas profesional.
-    Menú disponible: {json.dumps(MENU, ensure_ascii=False)}.
-    Reglas:
-    1. Si piden reserva, verifica el horario. Si es 20:00 y no hay cupo, sugiere 19:30 o 20:30.
-    2. Suma los platos elegidos y da el total.
-    3. Pide el pago por transferencia o adelanto para confirmar.
-    4. Sé amable, breve y natural. No parezcas un robot."""
+    # Si es el primer mensaje, iniciamos su memoria
+    if sender_id not in user_memory:
+        user_memory[sender_id] = [{"role": "system", "content": f"""Eres un mesero profesional de un restaurante.
+        Menú: {json.dumps(MENU, ensure_ascii=False)}.
+        Instrucciones:
+        1. Recuerda siempre el contexto de la conversación.
+        2. Si el usuario pide platos, multiplica precios por cantidades, suma el total.
+        3. SIEMPRE solicita un 50% de adelanto para confirmar la reserva.
+        4. Métodos de pago: "Puedes pagar el adelanto mediante Yape al 999-999-999 o transferencia al BCP 123456789".
+        5. Confirma la reserva solo cuando el usuario haya elegido platos y horario."""}]
+
+    # Guardamos el mensaje del usuario en su memoria
+    user_memory[sender_id].append({"role": "user", "content": incoming_msg})
 
     try:
+        # Enviamos toda la memoria a la IA
         chat_completion = client.chat.completions.create(
-            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": incoming_msg}],
-            model="llama-3.3-70b-versatile", # <--- CAMBIA SOLO ESTO
+            messages=user_memory[sender_id],
+            model="llama-3.3-70b-versatile",
         )
-        msg.body(chat_completion.choices[0].message.content)
+        
+        reply = chat_completion.choices[0].message.content
+        msg.body(reply)
+        
+        # Guardamos la respuesta de la IA en la memoria para el futuro
+        user_memory[sender_id].append({"role": "assistant", "content": reply})
+        
+        # Limpiamos memoria si se hace muy larga para no saturar
+        if len(user_memory[sender_id]) > 10:
+            user_memory[sender_id] = [user_memory[sender_id][0]] + user_memory[sender_id][-6:]
+
     except Exception as e:
-        print(f"ERROR DETECTADO: {e}") # Esto imprimirá el error real en los Logs
-        msg.body("Error técnico. Revisa los logs de Render.")
+        print(f"ERROR: {e}")
+        msg.body("Hubo un problema. Por favor, intenta de nuevo.")
 
     return str(resp)
 
 if __name__ == "__main__":
-    # Esta es la parte clave para que Render funcione correctamente
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
