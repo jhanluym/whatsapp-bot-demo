@@ -33,7 +33,7 @@ def bot():
     try:
         chat_completion = client.chat.completions.create(
             messages=[{"role": "system", "content": prompt}, {"role": "user", "content": incoming_msg}],
-            model="llama3-8b-8192",
+            model="llama-3.3-70b-versatile", # <--- CAMBIA SOLO ESTO
         )
         msg.body(chat_completion.choices[0].message.content)
     except Exception as e:
