@@ -37,7 +37,8 @@ def bot():
         )
         msg.body(chat_completion.choices[0].message.content)
     except Exception as e:
-        msg.body("Disculpa, estoy ajustando unos detalles. Intenta en un momento.")
+        print(f"ERROR DETECTADO: {e}") # Esto imprimirá el error real en los Logs
+        msg.body("Error técnico. Revisa los logs de Render.")
 
     return str(resp)
 
